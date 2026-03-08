@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <title>OpenAI GPT Chat</title>
+</head>
+
+<body class="bg-gray-900 text-gray-100 min-h-screen flex items-center">
+    <div class="max-w-2xl w-full mx-auto p-6 flex flex-col gap-6 h-[90vh]">
+        <header class="flex items-center justify-between">
+            <h1 class="text-2xl font-semibold tracking-tight">OpenAI GPT Clone</h1>
+            <a href="/history" class="text-sm text-indigo-300 hover:text-indigo-200 underline underline-offset-2">Ver historial</a>
+        </header>
+
+        <main class="flex-1 bg-gray-800 rounded-lg shadow-sm overflow-hidden flex flex-col">
+            <div class="px-4 py-3 border-b border-gray-700 text-gray-200">Chat</div>
+            <div id="chat" class="flex-1 p-4 overflow-y-auto space-y-3 bg-gradient-to-b from-gray-800 via-gray-800 to-gray-900" aria-live="polite">
+                <ul id="chatList" class="space-y-3">
+                </ul>
+            </div>
+            <form id="chatForm" class="p-4 bg-gray-800 border-t border-gray-700 flex gap-2" action="javascript:void(0)">
+                <input id="userInput" type="text" placeholder="Escribe un mensaje..." autocomplete="off" class="flex-1 bg-gray-900 border border-gray-700 rounded-l px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <button id="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-r">Enviar</button>
+            </form>
+        </main>
+
+        <footer class="text-xs text-gray-500 text-center">Interfaz minimalista — lista para integrar con backend</footer>
+    </div>
+
+    <script>
+        function appendMessage(role, label, text) {
+            const li = document.createElement('li');
+            li.className = role === 'user' ? 'ml-auto max-w-[80%] bg-indigo-600 text-white rounded px-3 py-2' : 'max-w-[80%] bg-gray-700 text-gray-100 rounded px-3 py-2';
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'text-sm';
+
+            const prefix = document.createElement('strong');
+            prefix.textContent = label + ' ';
+
+            const body = document.createElement('span');
+            body.textContent = text || '';
+
+            wrapper.appendChild(prefix);
+            wrapper.appendChild(body);
+            li.appendChild(wrapper);
+
+            document.getElementById('chatList').appendChild(li);
+            const chat = document.getElementById('chat');
+            chat.scrollTop = chat.scrollHeight;
+
+            return body;
+        }
+
+        function streamAssistantReply(userInput, assistantBodyEl) {
+            return new Promise(function (resolve, reject) {
+                const url = '/stream?msg=' + encodeURIComponent(userInput);
+                const source = new EventSource(url);
+                let answer = '';
+
+                source.onmessage = function (event) {
+                    try {
+                        const payload = JSON.parse(event.data);
+                        answer += payload.delta || '';
+                        assistantBodyEl.textContent = answer;
+                        const chat = document.getElementById('chat');
+                        chat.scrollTop = chat.scrollHeight;
+                    } catch (error) {
+                        source.close();
+                        reject(new Error('No se pudo procesar el stream'));
+                    }
+                };
+
+                source.addEventListener('done', function () {
+                    source.close();
+                    resolve(answer);
+                });
+
+                source.addEventListener('error', function (event) {
+                    source.close();
+                    if (event && event.data) {
+                        try {
+                            const payload = JSON.parse(event.data);
+                            reject(new Error(payload.message || 'Error al obtener respuesta'));
+                            return;
+                        } catch (parseError) {
+                            reject(new Error('Error al obtener respuesta'));
+                            return;
+                        }
+                    }
+                    reject(new Error('Error al obtener respuesta'));
+                });
+
+                source.onerror = function () {
+                    source.close();
+                    reject(new Error('Error de conexion de streaming'));
+                };
+            });
+        }
+
+        document.getElementById('chatForm').addEventListener('submit', async function (event) {
+            event.preventDefault();
+
+            const inputEl = document.getElementById('userInput');
+            const submitEl = document.getElementById('submit');
+            const userInput = inputEl.value.trim();
+            if (!userInput) return;
+
+            appendMessage('user', 'Tu:', userInput);
+            inputEl.value = '';
+
+            inputEl.disabled = true;
+            submitEl.disabled = true;
+
+            const assistantBodyEl = appendMessage('assistant', 'OpenAI:', '');
+
+            try {
+                await streamAssistantReply(userInput, assistantBodyEl);
+            } catch (error) {
+                assistantBodyEl.textContent = 'Error al obtener respuesta';
+            } finally {
+                inputEl.disabled = false;
+                submitEl.disabled = false;
+                inputEl.focus();
+            }
+        });
+    </script>
+</body>
+
+</html>

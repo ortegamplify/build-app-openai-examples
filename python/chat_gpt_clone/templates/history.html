@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <title>Historial de conversaciones</title>
+</head>
+
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <div class="max-w-6xl mx-auto p-6 grid gap-6 md:grid-cols-2">
+        <section class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+            <header class="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
+                <h1 class="text-lg font-semibold">Conversaciones guardadas</h1>
+                <a href="/" class="text-sm text-indigo-300 hover:text-indigo-200 underline underline-offset-2">Volver al chat</a>
+            </header>
+            <div class="max-h-[80vh] overflow-y-auto">
+                {% if conversations %}
+                <ul class="divide-y divide-gray-700">
+                    {% for item in conversations %}
+                    <li>
+                        <button
+                            class="w-full text-left px-4 py-3 hover:bg-gray-700/50 transition"
+                            onclick="loadConversation('{{ item.id }}')"
+                        >
+                            <div class="text-xs text-gray-400">ID: {{ item.id }}</div>
+                            <div class="text-xs text-gray-400">Session: {{ item.session_id }}</div>
+                            <div class="text-xs text-gray-400">Mensajes: {{ item.message_count }}</div>
+                            <div class="text-xs text-gray-400">Actualizada: {{ item.updated_at }}</div>
+                            <p class="mt-2 text-sm text-gray-200">{{ item.last_message }}</p>
+                        </button>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="p-4 text-sm text-gray-400">No hay conversaciones guardadas.</p>
+                {% endif %}
+            </div>
+        </section>
+
+        <section class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+            <header class="px-4 py-3 border-b border-gray-700">
+                <h2 class="text-lg font-semibold">Detalle de conversación</h2>
+            </header>
+            <div id="detail" class="p-4 space-y-3 max-h-[80vh] overflow-y-auto">
+                <p class="text-sm text-gray-400">Selecciona una conversación para ver su contenido.</p>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text || '';
+            return div.innerHTML;
+        }
+
+        async function loadConversation(conversationId) {
+            const detailEl = document.getElementById('detail');
+            detailEl.innerHTML = '<p class="text-sm text-gray-400">Cargando...</p>';
+
+            try {
+                const response = await fetch('/api/conversations/' + encodeURIComponent(conversationId));
+                if (!response.ok) {
+                    throw new Error('No se pudo cargar la conversación');
+                }
+
+                const data = await response.json();
+                const messagesHtml = data.messages.map(function (msg) {
+                    const roleClass = msg.role === 'user'
+                        ? 'bg-indigo-600 text-white ml-auto'
+                        : 'bg-gray-700 text-gray-100';
+                    const roleLabel = msg.role === 'user' ? 'Tu' : 'OpenAI';
+                    return '<div class="max-w-[90%] rounded px-3 py-2 ' + roleClass + '">' +
+                        '<div class="text-xs opacity-80 mb-1">' + roleLabel + '</div>' +
+                        '<div class="text-sm whitespace-pre-wrap">' + escapeHtml(msg.content) + '</div>' +
+                        '</div>';
+                }).join('');
+
+                detailEl.innerHTML = '' +
+                    '<div class="text-xs text-gray-400">ID: ' + escapeHtml(data.id) + '</div>' +
+                    '<div class="text-xs text-gray-400">Session: ' + escapeHtml(data.session_id) + '</div>' +
+                    '<div class="text-xs text-gray-400">Creada: ' + escapeHtml(data.created_at || '') + '</div>' +
+                    '<div class="text-xs text-gray-400">Actualizada: ' + escapeHtml(data.updated_at || '') + '</div>' +
+                    '<div class="pt-3 space-y-3 flex flex-col">' + messagesHtml + '</div>';
+            } catch (error) {
+                detailEl.innerHTML = '<p class="text-sm text-red-300">Error al cargar el detalle.</p>';
+            }
+        }
+    </script>
+</body>
+
+</html>
